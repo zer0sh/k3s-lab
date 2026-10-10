@@ -1,0 +1,15 @@
+# Mismo Service para ambos backends: ArgoCD usa siempre
+# http://git.git.svc.cluster.local/lab/k3s-lab.git
+apiVersion: v1
+kind: Service
+metadata:
+  name: git
+  namespace: git
+spec:
+  selector:
+    app: git
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  type: ClusterIP

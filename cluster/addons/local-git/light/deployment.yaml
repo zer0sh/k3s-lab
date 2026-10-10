@@ -1,0 +1,54 @@
+# Backend "light": git-http-backend sobre nginx, sin interfaz web (~15 MB de RAM)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: git
+  namespace: git
+  labels:
+    app: git
+    k3s-lab/git-backend: light
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: git
+  template:
+    metadata:
+      labels:
+        app: git
+        k3s-lab/git-backend: light
+    spec:
+      containers:
+        - name: git
+          image: nginx:1.29-alpine
+          command: ["sh", "/config/start.sh"]
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: data
+              mountPath: /srv/git
+            - name: config
+              mountPath: /config
+          readinessProbe:
+            httpGet:
+              path: /lab/k3s-lab.git/info/refs?service=git-upload-pack
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: git-data
+        - name: config
+          configMap:
+            name: git-light

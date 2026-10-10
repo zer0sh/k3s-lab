@@ -1,0 +1,70 @@
+# Backend "gitea": Git con interfaz web (http://localhost:3030 con make forward)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: git
+  namespace: git
+  labels:
+    app: git
+    k3s-lab/git-backend: gitea
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: git
+  template:
+    metadata:
+      labels:
+        app: git
+        k3s-lab/git-backend: gitea
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.24-rootless
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GITEA__database__DB_TYPE
+              value: sqlite3
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__server__ROOT_URL
+              value: http://localhost:3030/
+            - name: GITEA__server__DISABLE_SSH
+              value: "true"
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "true"
+            # git push a un repo inexistente lo crea (publico: ArgoCD lee sin credenciales)
+            - name: GITEA__repository__ENABLE_PUSH_CREATE_USER
+              value: "true"
+            - name: GITEA__repository__DEFAULT_PUSH_CREATE_PRIVATE
+              value: "false"
+            - name: GITEA__repository__DEFAULT_BRANCH
+              value: main
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/gitea
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: git-data
