@@ -3,15 +3,12 @@ kind: Application
 metadata:
   name: sample-app
   namespace: argocd
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: sample=steven58380/k3s-sample-app
-    argocd-image-updater.argoproj.io/sample.update-strategy: latest
-    argocd-image-updater.argoproj.io/write-back-method: git
 spec:
   project: default
   source:
-    repoURL: https://github.com/zer0-sh/k3s-platform.git
+    repoURL: https://github.com/zer0sh/k3s-lab.git
     targetRevision: main
+    # Kustomize (apps/sample-app/kustomization.yaml): requerido por Image Updater
     path: apps/sample-app
   destination:
     server: https://kubernetes.default.svc

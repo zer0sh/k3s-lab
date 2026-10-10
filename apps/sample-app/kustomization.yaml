@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+# ArgoCD Image Updater actualiza este bloque (write-back a Git)
+images:
+  - name: steven58380/k3s-sample-app
+    newTag: 216e2cf
