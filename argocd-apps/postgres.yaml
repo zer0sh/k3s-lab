@@ -6,13 +6,23 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/zer0-sh/k3s-platform.git
+    repoURL: https://github.com/zer0sh/k3s-lab.git
     targetRevision: main
     path: apps/postgres
   destination:
     server: https://kubernetes.default.svc
     namespace: postgres
+  # Las contraseñas se cambian en vivo (make db-password): Git solo tiene los valores iniciales
+  ignoreDifferences:
+    - kind: Secret
+      name: postgres-secret
+      jsonPointers:
+        - /data
+        - /stringData
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true

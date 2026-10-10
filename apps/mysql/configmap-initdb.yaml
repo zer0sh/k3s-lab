@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-initdb
+  namespace: mysql
+data:
+  # Solo corre en el primer arranque (volumen vacio). El entrypoint crea MYSQL_USER
+  # con acceso a MYSQL_DATABASE; aqui se le dan privilegios de administrador global.
+  01-admin-grants.sh: |
+    docker_process_sql --database=mysql <<<"GRANT ALL PRIVILEGES ON *.* TO '${MYSQL_USER}'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;"

@@ -29,6 +29,16 @@ spec:
                 secretKeyRef:
                   name: postgres-secret
                   key: PGADMIN_DEFAULT_PASSWORD
+          volumeMounts:
+            - name: servers
+              mountPath: /pgadmin4/servers.json
+              subPath: servers.json
+          readinessProbe:
+            httpGet:
+              path: /misc/ping
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
           resources:
             requests:
               cpu: 100m
@@ -36,3 +46,7 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+      volumes:
+        - name: servers
+          configMap:
+            name: pgadmin-servers
