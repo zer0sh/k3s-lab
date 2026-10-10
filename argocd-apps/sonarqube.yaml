@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/zer0-sh/k3s-platform.git
+    repoURL: https://github.com/zer0sh/k3s-lab.git
     targetRevision: main
     path: infrastructure/sonarqube
   destination:

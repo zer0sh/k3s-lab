@@ -6,9 +6,13 @@ metadata:
 spec:
   repo: https://argoproj.github.io/argo-helm
   chart: argocd-image-updater
+  # v1.x: configuracion via CRD ImageUpdater (ver imageupdater-sample-app.yaml)
+  version: 1.3.1
   targetNamespace: argocd
   valuesContent: |-
     config:
+      git.user: argocd-image-updater
+      git.email: argocd-image-updater@k3s-lab.local
       registries:
         - name: Docker Hub
           prefix: docker.io

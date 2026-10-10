@@ -6,11 +6,13 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/zer0-sh/k3s-platform.git
+    repoURL: https://github.com/zer0sh/k3s-lab.git
     targetRevision: main
     path: infrastructure
     directory:
       recurse: true
+      # argocd/ lo instala bootstrap.sh; sonarqube/ tiene su propia Application
+      exclude: '{argocd/*,sonarqube/*}'
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
@@ -19,3 +21,9 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

@@ -16,3 +16,12 @@ spec:
     configs:
       params:
         server.insecure: true
+      # Cuenta para los workflows de GitHub Actions (rollback.yaml)
+      cm:
+        accounts.ci: apiKey
+      rbac:
+        policy.csv: |
+          p, role:ci, applications, get, */*, allow
+          p, role:ci, applications, sync, */*, allow
+          p, role:ci, applications, update, */*, allow
+          g, ci, role:ci

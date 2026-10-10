@@ -1,0 +1,24 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: sample-app
+  namespace: argocd
+  annotations:
+    # El CRD lo crea el HelmChart de install.yaml; no fallar el dry-run si aun no existe
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  applicationRefs:
+    - namePattern: sample-app
+      images:
+        - alias: sample
+          imageName: steven58380/k3s-sample-app
+          commonUpdateSettings:
+            updateStrategy: newest-build
+            # Solo tags de commit (sha corto) generados por build-sample-app.yaml
+            allowTags: "regexp:^[0-9a-f]{7}$"
+  writeBackConfig:
+    # Requiere el secret argocd/git-creds (username + PAT con permiso de escritura)
+    method: "git:secret:git-creds"
+    gitConfig:
+      branch: main
+      writeBackTarget: kustomization
