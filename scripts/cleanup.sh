@@ -16,7 +16,9 @@ else
   echo "K3s no encontrado, saltando..."
 fi
 
-echo "[2/2] Limpiando kubeconfig..."
-rm -f "$HOME/.kube/config"
+# Solo el kubeconfig del lab; ~/.kube/config (otros clusters) no se toca
+K3S_KUBECONFIG="${K3S_KUBECONFIG:-$HOME/.kube/config-k3s}"
+echo "[2/2] Limpiando kubeconfig del lab ($K3S_KUBECONFIG)..."
+rm -f "$K3S_KUBECONFIG"
 
 echo "=== Limpieza completada ==="

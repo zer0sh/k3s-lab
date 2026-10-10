@@ -13,4 +13,5 @@ spec:
   chart: cert-manager
   targetNamespace: cert-manager
   valuesContent: |-
-    installCRDs: true
+    crds:
+      enabled: true
