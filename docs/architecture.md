@@ -1,5 +1,7 @@
 # Arquitectura - K3s Dev Platform Lab
 
+Laboratorio local de un solo nodo. Los diagramas reflejan lo que está implementado en el repo.
+
 ## Diagrama general
 
 ```mermaid
@@ -9,25 +11,27 @@ flowchart TB
 
     Dev -->|git push| GH
 
-    subgraph K3s["K3s Cluster"]
+    subgraph K3s["K3s Cluster (un nodo)"]
         direction TB
 
-        subgraph GitOps["GitOps"]
+        subgraph GitOps["GitOps (ns argocd)"]
             ArgoCD["ArgoCD\n(sync & deploy)"]
-            IU["Image Updater\n(detect new tags)"]
-            IU -->|update| ArgoCD
+            IU["Image Updater\n(detecta nuevos tags)"]
         end
 
-        GH -->|webhook / poll| ArgoCD
+        GH -->|poll ~3 min| ArgoCD
+        IU -->|commit del tag en\nkustomization.yaml| GH
 
         subgraph Apps["Applications"]
-            SampleApp["sample-app\nDeployment + Service\n+ Ingress + ConfigMap"]
+            SampleApp["sample-app\nKustomize: Deployment + Service\n+ Ingress + ConfigMap"]
             PG["PostgreSQL 16\n(StatefulSet + PVC)"]
             PGAdmin["pgAdmin 4\n(DB admin UI)"]
+            MY["MySQL 8.4 LTS\n(StatefulSet + PVC)"]
+            PMA["phpMyAdmin\n(DB admin UI)"]
         end
 
         subgraph Observability["Observability Stack"]
-            Prometheus["Prometheus\n(metrics)"]
+            Prometheus["Prometheus\n(+ kube-state-metrics,\nnode-exporter)"]
             Grafana["Grafana\n(dashboards)"]
             Loki["Loki\n(log aggregation)"]
             Promtail["Promtail\n(log collection)"]
@@ -40,27 +44,26 @@ flowchart TB
         end
 
         subgraph Addons["Cluster Addons"]
-            Ingress["NGINX Ingress\nController"]
-            CertMgr["Cert-Manager"]
+            Ingress["NGINX Ingress\n(NodePort 31080/31443)"]
+            CertMgr["Cert-Manager\n(selfsigned-issuer)"]
+            MS["Metrics Server\n(integrado en K3s)"]
         end
 
         ArgoCD -->|deploy| Apps
         ArgoCD -->|deploy| Observability
         ArgoCD -->|deploy| QA
+        ArgoCD -->|deploy| IU
 
         Promtail -->|logs| Loki
-        Prometheus -->|scrape| SampleApp
-        Prometheus -->|scrape| PG
-        Prometheus -->|scrape| Addons
+        Prometheus -->|scrape kubelet/cAdvisor,\nnodos, kube-state-metrics| K3s
         Grafana -->|query| Prometheus
         Grafana -->|query| Loki
 
         PGAdmin -->|manage| PG
+        PMA -->|manage| MY
 
-        Ingress -->|route traffic| SampleApp
-        Ingress -->|route traffic| ArgoCD
-        Ingress -->|route traffic| Grafana
-        Ingress -->|route traffic| SonarQube
+        CertMgr -->|certificado TLS| Ingress
+        Ingress -->|route sample-app.local| SampleApp
     end
 
     DH["Docker Hub"]:::external
@@ -68,15 +71,28 @@ flowchart TB
 
     GH -->|trigger| CI
     CI -->|push image| DH
-    DH -->|poll new tags| IU
+    DH -->|poll ~2 min| IU
 
     User["User / Browser"]:::external
-    User -->|HTTPS| Ingress
+    User -->|HTTPS :31443| Ingress
+    User -->|port-forward| K3s
 
     classDef external fill:#f0f0f0,stroke:#999,color:#333
 ```
 
-## Flujo GitOps
+### Fuente Git alternativa (sin GitHub)
+
+`make push-local` instala un servidor Git en el namespace `git` (Gitea o `git-http-backend` ligero, ambos con la misma URL) y le envía un snapshot del working tree. Las Applications pasan a leer de `http://git.git.svc.cluster.local/lab/k3s-lab.git`, e Image Updater escribe ahí. `make use-github` las devuelve a GitHub. Detalle: [deploy-sin-github.md](deploy-sin-github.md).
+
+```mermaid
+flowchart LR
+    WT["Working tree local\n(sin commit)"] -->|make push-local\nport-forward + git push| LG["Git local\n(ns git: Gitea o light)"]
+    LG -->|poll / refresh| Argo["ArgoCD"]
+    Argo -->|deploy| K3s["Apps del lab"]
+    IU["Image Updater"] -->|write-back| LG
+```
+
+## Flujo GitOps (sample-app)
 
 ```mermaid
 sequenceDiagram
@@ -88,88 +104,114 @@ sequenceDiagram
     participant Argo as ArgoCD
     participant K3s as K3s Cluster
 
-    Dev->>GH: git push (apps/ o infrastructure/)
-    GH->>CI: Trigger workflows (lint, trivy, sonar, build)
-    CI->>DH: Push Docker image
-    DH-->>IU: New tag detected (poll)
-    IU->>Argo: Update image in app spec
+    Dev->>GH: git push (apps/sample-app/docker/)
+    GH->>CI: Build & Push Sample App
+    CI->>DH: Push steven58380/k3s-sample-app:<sha7> y :latest
+    IU->>DH: Poll de tags (newest-build, solo ^[0-9a-f]{7}$)
+    IU->>GH: Commit: newTag en apps/sample-app/kustomization.yaml
+    Argo->>GH: Poll del repo (~3 min)
     Argo->>Argo: Compara estado deseado vs actual
     Argo->>K3s: Aplica manifiestos
     K3s-->>Argo: Reporta estado
     Argo-->>Dev: Sync OK (UI / CLI)
-    Note over CI,K3s: Si health check falla -> rollback automatico
+    Note over CI,K3s: Workflow Auto Rollback (self-hosted runner):<br/>si la app no queda Healthy + Synced, desactiva auto-sync y hace rollback
 ```
 
 ## Flujo de observabilidad
 
 ```mermaid
 flowchart LR
-    Pods["Pods / Services"] -->|metrics endpoint| Prometheus
+    Pods["Pods / Nodos"] -->|cAdvisor, kubelet,\nnode-exporter, kube-state-metrics| Prometheus
     Pods -->|stdout/stderr| Promtail
     Promtail -->|push| Loki
     Prometheus --> Grafana
     Loki --> Grafana
-    Grafana -->|dashboards & alerts| User["Operator"]
+    Grafana -->|dashboard K3s Platform Overview| User["Operator"]
 ```
+
+Las apps no exponen métricas propias: los paneles muestran CPU, memoria, red, pods y reinicios por namespace, más los logs recientes de Loki. Alertmanager y Pushgateway están deshabilitados.
 
 ## Flujo CI/CD
 
 ```mermaid
 flowchart LR
-    Push["git push"] --> Lint["KubeLinter\n+ yamllint"]
-    Push --> Trivy["Trivy\n(vulnerabilities)"]
-    Push --> Sonar["SonarQube\n(code quality)"]
-    Push --> Build["Docker Build\n& Push"]
-    Build --> IU["Image Updater\ndetects new tag"]
-    IU --> Argo["ArgoCD\ndeploys"]
-    Argo --> HC["Health Check"]
+    Push["git push / PR"] --> Lint["KubeLinter + yamllint\n(informativo)"]
+    Push --> Trivy["Trivy imagen + manifiestos\n(informativo)"]
+    Push --> Sonar["SonarQube\n(self-hosted runner)"]
+    Push -->|apps/sample-app/docker/**| Build["Docker Build\n& Push"]
+    Build --> IU["Image Updater\ndetecta nuevo tag"]
+    IU --> Argo["ArgoCD\ndespliega"]
+    Build -->|workflow_run| HC["Health Check\n(self-hosted runner)"]
     HC -->|healthy| Done["Done"]
-    HC -->|unhealthy| Rollback["Auto Rollback"]
+    HC -->|unhealthy| Rollback["Rollback\n(auto-sync off)"]
 ```
 
 ## Componentes
 
 ### Capa de cluster (cluster/)
-- **K3s**: Distribucion ligera de Kubernetes (v1.34+, incluye Metrics Server)
-- **NGINX Ingress**: Controlador de trafico entrante (NodePort 31080/31443)
-- **Cert-Manager**: Gestion automatica de certificados TLS
+- **K3s**: distribución ligera de Kubernetes (v1.34+). Incluye Metrics Server, Traefik, CoreDNS y local-path-provisioner
+- **NGINX Ingress**: controlador de tráfico entrante en NodePort 31080 (HTTP) / 31443 (HTTPS)
+- **Cert-Manager**: emite certificados con el `ClusterIssuer` `selfsigned-issuer` (usado por el Ingress de la sample-app)
 
-> **Nota:** K3s trae Traefik por defecto ocupando puertos 80/443. NGINX Ingress usa NodePort para evitar el conflicto. Para usar puertos estandar, instalar K3s con `--disable traefik`.
+> **Nota:** K3s trae Traefik por defecto ocupando los puertos 80/443, por eso NGINX Ingress usa NodePort. Para usar puertos estándar, instala K3s con `--disable traefik`. El proyecto ingress-nginx fue retirado upstream: para un lab sirve, pero Traefik es la alternativa natural en K3s.
+
+Todos los componentes Helm se instalan con el CRD `HelmChart` del helm-controller de K3s (namespace `kube-system`), sin necesidad de usar `helm` en la máquina.
 
 ### Capa de infraestructura (infrastructure/)
-- **ArgoCD**: Motor de GitOps para despliegue continuo
-- **ArgoCD Image Updater**: Detecta nuevas imagenes en Docker Hub y actualiza deployments
-- **Prometheus**: Recoleccion y almacenamiento de metricas
-- **Grafana**: Visualizacion de metricas y logs (dashboard pre-configurado: cluster-overview)
-- **Loki + Promtail**: Agregacion y recoleccion de logs
-- **SonarQube**: Analisis estatico de codigo (con su propia base de datos PostgreSQL)
+- **ArgoCD**: motor GitOps. Sirve HTTP (`server.insecure: true`). Cuenta `ci` (API key) con permisos `get`/`sync`/`update` sobre applications, para el workflow de rollback
+- **ArgoCD Image Updater** v1.3: configurado con el CR `ImageUpdater` `sample-app`. Estrategia `newest-build` sobre tags `sha7` y write-back `git` a `kustomization.yaml`, con el secret `argocd/git-creds`
+- **Prometheus**: chart `prometheus-community/prometheus`, retención 7d, PV 5Gi
+- **Grafana**: datasources Prometheus y Loki preconfigurados; dashboard `K3s Platform Overview` cargado por sidecar desde un ConfigMap
+- **Loki + Promtail**: chart `loki-stack`, PV 5Gi
+- **SonarQube**: LTS Community con PostgreSQL 15 dedicado; initContainer privilegiado que ajusta `vm.max_map_count`
 
 ### Capa de aplicaciones (apps/)
-- **sample-app**: App de ejemplo con Dockerfile, Deployment, Service, ConfigMap, Ingress, Namespace
-- **postgres**: PostgreSQL 16 (StatefulSet + PVC) + pgAdmin 4 (UI de administracion)
+- **sample-app**: nginx con página estática y endpoint `/health` (readiness/liveness). Imagen `steven58380/k3s-sample-app`, 2 réplicas
+- **postgres**: PostgreSQL 16 (StatefulSet + PVC 1Gi, readiness `pg_isready`). Usuario `admin` superusuario y base `devlab` vacía. pgAdmin 4 con el servidor preconfigurado (`servers.json` desde un ConfigMap)
+- **mysql**: MySQL 8.4 LTS (StatefulSet + PVC 1Gi, probes `mysqladmin ping`). Usuario `admin` con todos los privilegios (script de init en un ConfigMap), `root` y base `devlab` vacía. phpMyAdmin apuntando a `mysql:3306`
+- Sin datos de ejemplo. Las contraseñas se cambian en vivo con `scripts/db-password.sh` (`make db-password`), que actualiza la base de datos y el Secret
+
+### Applications de ArgoCD (argocd-apps/)
+
+| Application      | Path                          | Notas                                                   |
+|------------------|-------------------------------|---------------------------------------------------------|
+| `infrastructure` | `infrastructure/` (recursivo) | Excluye `argocd/` (lo instala bootstrap) y `sonarqube/` |
+| `sonarqube`      | `infrastructure/sonarqube`    |                                                         |
+| `postgres`       | `apps/postgres`               | Ignora cambios en vivo de `postgres-secret`             |
+| `mysql`          | `apps/mysql`                  | Ignora cambios en vivo de `mysql-secret`                |
+| `sample-app`     | `apps/sample-app`             | Kustomize, requerido por Image Updater                  |
+
+Todas usan sync automático con `prune` y `selfHeal`.
 
 ### Namespaces
 
-| Namespace | Componentes |
-|-----------|------------|
-| `argocd` | ArgoCD Server, Image Updater |
-| `monitoring` | Prometheus, Grafana |
-| `logging` | Loki, Promtail |
-| `sonarqube` | SonarQube, PostgreSQL (SonarQube DB) |
-| `postgres` | PostgreSQL 16, pgAdmin 4 |
-| `sample-app` | Sample App |
-| `ingress-nginx` | NGINX Ingress Controller |
-| `cert-manager` | Cert-Manager |
+| Namespace       | Componentes                                                        |
+|-----------------|--------------------------------------------------------------------|
+| `argocd`        | ArgoCD, Image Updater                                              |
+| `monitoring`    | Prometheus (+ kube-state-metrics, node-exporter), Grafana          |
+| `logging`       | Loki, Promtail                                                     |
+| `sonarqube`     | SonarQube, PostgreSQL (SonarQube DB)                               |
+| `postgres`      | PostgreSQL 16, pgAdmin 4                                           |
+| `mysql`         | MySQL 8.4 LTS, phpMyAdmin                                          |
+| `git`           | Git local (Gitea o ligero), solo con `make push-local`             |
+| `sample-app`    | Sample App                                                         |
+| `ingress-nginx` | NGINX Ingress Controller                                           |
+| `cert-manager`  | Cert-Manager                                                       |
+| `kube-system`   | CRs `HelmChart`, Traefik, Metrics Server, CoreDNS (propios de K3s) |
 
-## Puertos locales (port-forward)
+## Acceso
 
-| Servicio   | Puerto local | Credenciales |
-|------------|-------------|-------------|
-| ArgoCD     | :8080 (HTTPS) | admin / (auto) |
-| Grafana    | :3000 | admin / admin |
-| Prometheus | :9090 | - |
-| SonarQube  | :9001 | admin / admin |
-| pgAdmin    | :5050 | admin@devlab.com / admin123 |
-| Sample App | :8081 | - |
-| PostgreSQL | :5432 | admin / admin123 |
-| Loki       | :3100 | - |
+| Servicio   | Port-forward local          | Credenciales                |
+|------------|-----------------------------|-----------------------------|
+| ArgoCD     | http://localhost:8080       | admin / (auto)              |
+| Grafana    | http://localhost:3000       | admin / admin               |
+| Prometheus | http://localhost:9090       | -                           |
+| SonarQube  | http://localhost:9001       | admin / admin               |
+| pgAdmin    | http://localhost:5050       | admin@devlab.com / admin123 |
+| Sample App | http://localhost:8081       | -                           |
+| PostgreSQL | localhost:5432              | admin / admin123            |
+| phpMyAdmin | http://localhost:8082       | usuarios de MySQL           |
+| MySQL      | localhost:3306              | admin / admin123, root / root123 |
+| Loki       | http://localhost:3100/ready | -                           |
+
+Son las credenciales iniciales (`make db-creds` muestra las vigentes). Detalle en [access-services.md](access-services.md).
