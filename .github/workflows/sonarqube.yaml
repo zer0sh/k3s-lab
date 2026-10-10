@@ -1,5 +1,9 @@
 name: SonarQube Analysis
 
+# SonarQube vive en el cluster local del lab: para que el runner llegue a el,
+# usa un self-hosted runner (variable de repo CLUSTER_RUNNER) o expon SonarQube.
+# Sin SONAR_TOKEN / SONAR_HOST_URL el analisis se salta sin fallar.
+
 on:
   pull_request:
   push:
@@ -10,7 +14,10 @@ on:
 jobs:
   sonarqube:
     name: SonarQube Scan
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CLUSTER_RUNNER || 'ubuntu-latest' }}
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,22 +25,17 @@ jobs:
           fetch-depth: 0
 
       - name: SonarQube Scan
+        if: env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != ''
         uses: SonarSource/sonarqube-scan-action@v5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       - name: Generate summary
         if: always()
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
           echo "## 📊 SonarQube Analysis" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          if [ -z "$SONAR_HOST_URL" ]; then
-            echo "⚠️ \`SONAR_HOST_URL\` not configured. Add it to repo secrets." >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$SONAR_HOST_URL" ] || [ -z "$SONAR_TOKEN" ]; then
+            echo "⏭️ Skipped: \`SONAR_TOKEN\` / \`SONAR_HOST_URL\` not configured. Add them to repo secrets." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 

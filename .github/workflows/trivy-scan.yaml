@@ -5,12 +5,18 @@ on:
     paths:
       - "apps/**/Dockerfile"
       - "apps/**/docker/**"
+      - "apps/**/*.yaml"
+      - "cluster/**/*.yaml"
+      - "infrastructure/**/*.yaml"
   push:
     branches:
       - main
     paths:
       - "apps/**/Dockerfile"
       - "apps/**/docker/**"
+      - "apps/**/*.yaml"
+      - "cluster/**/*.yaml"
+      - "infrastructure/**/*.yaml"
   workflow_dispatch:
 
 env:
