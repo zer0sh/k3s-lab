@@ -1,0 +1,23 @@
+# AI Agent rules & local instructions
+AGENTS.md
+
+# Local planning and notes
+plan.md
+todo.md
+
+# Kubernetes / Local configs
+*.kubeconfig
+config-k3s
+
+# Editor & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Temporary & log files
+*.log
+*.tmp
