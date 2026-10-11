@@ -17,8 +17,8 @@ config-k3s
 *~
 .DS_Store
 Thumbs.db
-
-# Temporary & log files
-*.log
-*.tmp
+# Screenshot tooling & dependencies (local only)
+scripts/screenshots/
+node_modules/
+package-lock.json
 

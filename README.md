@@ -30,7 +30,7 @@ k3s-lab/
 └── docs/               # Documentación
 ```
 
-Diagramas y detalle de componentes: [docs/architecture.md](docs/architecture.md).
+Wiki visual con capturas y diagramas: [docs/wiki.md](docs/wiki.md). Detalle de componentes y arquitectura: [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -59,6 +59,17 @@ Diagramas y detalle de componentes: [docs/architecture.md](docs/architecture.md)
 También se puede desplegar **sin GitHub**: `make push-local` envía tu working tree (sin commit) a un Git dentro del cluster y ArgoCD lee de ahí. Ver [Desplegar sin GitHub](#desplegar-sin-github).
 
 Para la `sample-app`, además, **GitHub Actions** construye la imagen, **Image Updater** detecta el nuevo tag y hace commit del tag en `apps/sample-app/kustomization.yaml`, y ArgoCD lo despliega.
+
+```mermaid
+flowchart LR
+    Dev["Developer"] -->|git push| GH["GitHub (main)"]
+    GH -->|polling ~3 min| Argo["ArgoCD"]
+    Argo -->|sync / self-heal| K3s["K3s Cluster"]
+
+    Actions["GitHub Actions"] -->|build & push| Hub["Docker Hub"]
+    Hub -->|poll tag| IU["Image Updater"]
+    IU -->|write-back tag| GH
+```
 
 ---
 

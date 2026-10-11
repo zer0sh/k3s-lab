@@ -38,7 +38,7 @@ Está pensado como entorno de práctica local, no como réplica de dev o prod: p
 
 ArgoCD sincroniza automáticamente el estado del cluster con el repositorio. Cualquier cambio en `apps/` o `infrastructure/` se detecta (polling) y se despliega sin intervención manual.
 
-<!-- screenshot: argocd-dashboard.png -->
+![ArgoCD Dashboard](screenshots/argocd-dashboard.png)
 
 **Funcionalidades:**
 - Sync automático con self-heal (si alguien modifica algo en el cluster, ArgoCD lo revierte)
@@ -52,34 +52,17 @@ ArgoCD sincroniza automáticamente el estado del cluster con el repositorio. Cua
 
 <!-- screenshot: github-actions-overview.png -->
 
-```
-push a main
-    |
-    v
-+-------------------+     +------------------+     +------------------+
-| Lint Manifests    |     | Trivy Security   |     | SonarQube        |
-| (KubeLinter +     |     | (Image scan +    |     | (Code quality    |
-|  yamllint)        |     |  Config scan)    |     |  analysis)       |
-+-------------------+     +------------------+     +------------------+
-    |
-    v  (cambios en apps/sample-app/docker/)
-+-------------------+
-| Build & Push      |
-| (Docker Hub)      |
-+-------------------+
-    |
-    v
-+-------------------+
-| Image Updater     |
-| commit del tag -> |
-| ArgoCD despliega  |
-+-------------------+
-    |
-    v
-+-------------------+
-| Health Check      |---> OK: done
-| (post-deploy)     |---> FAIL: rollback
-+-------------------+
+```mermaid
+flowchart TD
+    Push["push a main"] --> Lint["Lint Manifests<br/>(KubeLinter + yamllint)"]
+    Push --> Trivy["Trivy Security<br/>(Image + Config scan)"]
+    Push --> Sonar["SonarQube<br/>(Code quality analysis)"]
+
+    Push -->|cambios en apps/sample-app/docker/| Build["Build & Push<br/>(Docker Hub)"]
+    Build --> IU["Image Updater<br/>commit tag -> ArgoCD despliega"]
+    IU --> HC{"Health Check<br/>(post-deploy)"}
+    HC -->|OK| Done["Despliegue exitoso"]
+    HC -->|FAIL| Rollback["Auto Rollback"]
 ```
 
 **Workflows:**
@@ -98,7 +81,7 @@ Todos generan **GitHub Job Summaries** con tablas, conteos y secciones colapsabl
 
 ### Observabilidad
 
-<!-- screenshot: grafana-dashboard.png -->
+![Grafana Dashboard](screenshots/grafana-dashboard.png)
 
 **Prometheus** recolecta métricas de nodos (node-exporter), contenedores (cAdvisor/kubelet) y objetos del cluster (kube-state-metrics). **Grafana** las muestra en el dashboard preconfigurado **K3s Platform Overview**: CPU y memoria por namespace, pods, reinicios, red y logs recientes. **Loki** + **Promtail** agregan los logs de todos los contenedores para búsqueda centralizada.
 
@@ -115,13 +98,13 @@ Todos generan **GitHub Job Summaries** con tablas, conteos y secciones colapsabl
 | Sample App | :8081        | -                           |
 | Loki       | :3100        | -                           |
 
-<!-- screenshot: prometheus-targets.png -->
+![Prometheus Targets](screenshots/prometheus-targets.png)
 
 ### Bases de datos con persistencia
 
 **PostgreSQL 16** y **MySQL 8.4 LTS** desplegados como **StatefulSet** con PersistentVolumeClaim, demostrando manejo de estado en Kubernetes. Cada motor tiene su UI de administración: **pgAdmin 4** y **phpMyAdmin**.
 
-<!-- screenshot: pgadmin-dashboard.png -->
+![pgAdmin Dashboard](screenshots/pgadmin.png)
 
 **Características:**
 - StatefulSet (no Deployment), el patrón correcto para bases de datos
@@ -142,7 +125,7 @@ Todos generan **GitHub Job Summaries** con tablas, conteos y secciones colapsabl
 
 **SonarQube** (LTS Community) se despliega dentro del cluster con su propia base de datos PostgreSQL. Analiza calidad de código y detecta bugs, code smells y vulnerabilidades. Accesible en http://localhost:9001.
 
-<!-- screenshot: sonarqube-dashboard.png -->
+![SonarQube Dashboard](screenshots/sonarqube-dashboard.png)
 
 ### Rollback automático
 
