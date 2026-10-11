@@ -7,7 +7,7 @@ source "$SCRIPT_DIR/lib.sh"
 echo "=== Levantando port-forwards ==="
 
 declare -A SERVICES=(
-  ["ArgoCD"]="svc/argocd-server -n argocd 8080:443"
+  ["ArgoCD"]="svc/argocd-server -n argocd 8080:80"
   ["Grafana"]="svc/grafana -n monitoring 3000:80"
   ["Prometheus"]="svc/prometheus-server -n monitoring 9090:80"
   ["Sample App"]="svc/sample-app -n sample-app 8081:80"

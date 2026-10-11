@@ -3,6 +3,7 @@
 
 # Kubeconfig dedicado al lab: no pisa ~/.kube/config (otros clusters)
 export KUBECONFIG="${K3S_KUBECONFIG:-$HOME/.kube/config-k3s}"
+export PATH="$HOME/.local/bin:$PATH"
 
 # Espera a que exista un CRD y quede Established (los HelmChart de K3s instalan en segundo plano)
 wait_for_crd() {

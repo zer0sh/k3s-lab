@@ -7,9 +7,13 @@ source "$SCRIPT_DIR/lib.sh"
 
 echo "=== K3s Platform Bootstrap ==="
 
-# 1. Instalar K3s
-echo "[1/4] Instalando K3s..."
-bash "$PROJECT_DIR/cluster/bootstrap/install-k3s.sh"
+# 1. Instalar K3s (si no esta disponible)
+if command -v k3s >/dev/null 2>&1 && [ -f "$KUBECONFIG" ] && kubectl get nodes >/dev/null 2>&1; then
+  echo "[1/4] K3s ya esta corriendo y listo, saltando instalacion..."
+else
+  echo "[1/4] Instalando K3s..."
+  bash "$PROJECT_DIR/cluster/bootstrap/install-k3s.sh"
+fi
 
 # 2. Esperar a que el cluster este listo
 echo "[2/4] Esperando a que el cluster este listo..."
